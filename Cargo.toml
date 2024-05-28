@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "linter"
+version = "0.1.0"
+
+[dependencies]
+clap = {version = "4.5.4", features = ["derive", "cargo"]}
+serde = {version = "1.0.203", features = ["derive"]}
+tree-sitter = "0.22.6"
+tree-sitter-cpp = "0.22.1"
