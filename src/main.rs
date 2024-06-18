@@ -1,10 +1,41 @@
 use clap::{command, Arg};
 use std::fs;
-use tree_sitter::{Parser, TreeCursor};
 mod linter;
 mod parse;
+mod reporter;
 
 fn main() {
+    let (Some(file_content), debug) = get_file_content() else {
+        return;
+    };
+
+    let tree = parse::convert_into_tree(&file_content);
+
+    // Get the root node from the parsed tree
+    let root_node = tree.root_node();
+
+    if debug == 1 {
+        // Print the AST
+        let mut cursor = root_node.walk();
+        parse::traverse_tree(&mut cursor);
+    }
+
+    // Initialize the linter
+    let mut issues = Vec::new();
+    let mut modified_code = Vec::new();
+
+    // Call the linter on the root node of the tree
+    linter::check_for_issues(
+        root_node,
+        &mut issues,
+        file_content.as_bytes(),
+        &mut modified_code,
+    );
+
+    reporter::report_issues(issues);
+}
+
+fn get_file_content() -> (Option<String>, i32) {
     let matches = command!()
         .arg(
             Arg::new("input")
@@ -13,80 +44,26 @@ fn main() {
                 .required(true)
                 .help("Specify the path to the file to read."),
         )
+        .arg(
+            Arg::new("Debug")
+                .short('d')
+                .long("debug")
+                .required(false)
+                .help("Enable debug mode."),
+        )
         .get_matches();
-
     let path = matches.get_one::<String>("input").expect("required");
-
+    let debug = matches
+        .get_one::<String>("Debug")
+        .map_or(0, |s| s.parse::<i32>().unwrap_or(0));
     let file_content = match read_file(path) {
         Ok(content) => content,
         Err(e) => {
             eprintln!("Error reading file: {e}");
-            return;
+            return (None, 0);
         }
     };
-
-    let mut parser = Parser::new();
-    let language = tree_sitter_cpp::language();
-    parser
-        .set_language(&language)
-        .expect("Error loading C++ grammar");
-
-    let tree = parser
-        .parse(&file_content, None)
-        .expect("Error parsing C++ code");
-
-    let root_node = tree.root_node(); // Get the root node from the parsed tree
-
-    let mut issues = Vec::new();
-    let mut modified_code = Vec::new();
-
-    linter::check_for_issues(
-        root_node,
-        &mut issues,
-        file_content.as_bytes(),
-        &mut modified_code,
-    );
-
-    if issues.is_empty() {
-        println!("No issues found");
-    } else {
-        for issue in issues {
-            println!("Issue: {issue}");
-        }
-    }
-
-    // let (issues, modified_code) = linter::lint(&tree, file_content.as_bytes());
-    // if issues.is_empty() {
-    //     println!("No issues found");
-    // } else {
-    //     for issue in issues {
-    //         println!("Issue: {issue}");
-    //     }
-    // }
-
-    // // Print or save the modified code
-    // println!("Modified code:\n{modified_code}");
-}
-
-fn traverse_tree(cursor: &mut TreeCursor) {
-    loop {
-        let node = cursor.node();
-        println!("{node:?}");
-
-        if cursor.goto_first_child() {
-            continue;
-        }
-
-        if cursor.goto_next_sibling() {
-            continue;
-        }
-
-        while !cursor.goto_next_sibling() {
-            if !cursor.goto_parent() {
-                return;
-            }
-        }
-    }
+    (Some(file_content), debug)
 }
 
 fn read_file(file_path: &str) -> Result<String, std::io::Error> {
