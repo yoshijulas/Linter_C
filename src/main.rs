@@ -22,15 +22,9 @@ fn main() {
 
     // Initialize the linter
     let mut issues = Vec::new();
-    let mut modified_code = Vec::new();
 
     // Call the linter on the root node of the tree
-    linter::check_for_issues(
-        root_node,
-        &mut issues,
-        file_content.as_bytes(),
-        &mut modified_code,
-    );
+    linter::check_for_issues(root_node, &mut issues, file_content.as_bytes());
 
     reporter::report_issues(issues);
 }
